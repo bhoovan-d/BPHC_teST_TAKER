@@ -282,10 +282,10 @@ app.post('/api/admin/upload-test', checkAdminAuth, upload.single('file'), async 
       });
     }
 
-    // Process using SQLite Transaction to ensure atomicity
-    const result = await db.transaction(async () => {
-      const sector = await db.getOrCreateSector(sectorName);
-      const testId = await db.createTest(sector.id, testName, duration, proctorEnabled, warningsLimit, startVal, endVal);
+    // Process using PostgreSQL Transaction to ensure atomicity
+    const result = await db.transaction(async (client) => {
+      const sector = await db.getOrCreateSector(sectorName, client);
+      const testId = await db.createTest(sector.id, testName, duration, proctorEnabled, warningsLimit, startVal, endVal, client);
 
       let questionCount = 0;
       for (const row of rows) {
@@ -317,7 +317,7 @@ app.post('/api/admin/upload-test', checkAdminAuth, upload.single('file'), async 
           if (!['A', 'B', 'C', 'D'].includes(cleanCorrect)) {
             throw new Error(`Invalid correct option value "${correct}" for question: "${qText}". Must be A, B, C, or D.`);
           }
-          await db.addQuestion(testId, qText, optA, optB, optC, optD, cleanCorrect, explanation);
+          await db.addQuestion(testId, qText, optA, optB, optC, optD, cleanCorrect, explanation, client);
           questionCount++;
         }
       }

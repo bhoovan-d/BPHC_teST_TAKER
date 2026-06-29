@@ -1,174 +1,109 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const fs = require('fs');
+const { Pool } = require('pg');
 require('dotenv').config();
 
-const dbPath = path.join(__dirname, process.env.DATABASE_FILE || 'database.sqlite');
+const connectionString = process.env.DATABASE_URL;
 
-// Connect to SQLite Database
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database:', err.message);
-  } else {
-    console.log('Connected to the SQLite database.');
-    db.run('PRAGMA foreign_keys = ON'); // Enable foreign key constraints
-  }
+if (!connectionString) {
+  console.error('DATABASE_URL is not configured in your .env file!');
+}
+
+// Establish PostgreSQL connection pool
+// For Supabase, rejectUnauthorized: false is required to support SSL mode
+const pool = new Pool({
+  connectionString: connectionString,
+  ssl: connectionString && connectionString.includes('supabase') ? { rejectUnauthorized: false } : false
 });
 
-// Helper functions wrapping sqlite3 operations in Promises
-function run(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ id: this.lastID, changes: this.changes });
-      }
-    });
-  });
+// Generic promise query helpers
+async function query(sql, params = []) {
+  return pool.query(sql, params);
 }
 
-function get(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(row);
-      }
-    });
-  });
-}
-
-function all(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
-}
-
-// Transaction wrapper helper
-function transaction(fn) {
-  return new Promise((resolve, reject) => {
-    db.serialize(() => {
-      db.run('BEGIN TRANSACTION', (err) => {
-        if (err) return reject(err);
-        fn()
-          .then((res) => {
-            db.run('COMMIT', (commitErr) => {
-              if (commitErr) reject(commitErr);
-              else resolve(res);
-            });
-          })
-          .catch((fnErr) => {
-            db.run('ROLLBACK', () => {
-              reject(fnErr);
-            });
-          });
-      });
-    });
-  });
+// Transaction helper - passes client to callback so transactional queries execute on the same client connection
+async function transaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // Initialize tables
 async function initializeDatabase() {
   try {
     // Create Admins table
-    await run(`
+    await query(`
       CREATE TABLE IF NOT EXISTS admins (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(255) UNIQUE NOT NULL,
         password TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Create Sectors table
-    await run(`
+    await query(`
       CREATE TABLE IF NOT EXISTS sectors (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) UNIQUE NOT NULL
       )
     `);
 
     // Create Tests table
-    await run(`
+    await query(`
       CREATE TABLE IF NOT EXISTS tests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sector_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        sector_id INTEGER NOT NULL REFERENCES sectors(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
         duration_mins INTEGER NOT NULL DEFAULT 30,
         results_released INTEGER NOT NULL DEFAULT 0,
         proctoring_enabled INTEGER NOT NULL DEFAULT 0,
         max_warnings INTEGER NOT NULL DEFAULT 3,
-        window_start DATETIME,
-        window_end DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (sector_id) REFERENCES sectors(id) ON DELETE CASCADE
+        window_start TIMESTAMP,
+        window_end TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Dynamic schema update: try to add results_released, proctoring_enabled, max_warnings to tests table if they weren't there
-    try {
-      await run('ALTER TABLE tests ADD COLUMN results_released INTEGER DEFAULT 0');
-    } catch (alterError) {}
-    try {
-      await run('ALTER TABLE tests ADD COLUMN proctoring_enabled INTEGER DEFAULT 0');
-    } catch (alterError) {}
-    try {
-      await run('ALTER TABLE tests ADD COLUMN max_warnings INTEGER DEFAULT 3');
-    } catch (alterError) {}
-    try {
-      await run('ALTER TABLE tests ADD COLUMN window_start DATETIME');
-    } catch (alterError) {}
-    try {
-      await run('ALTER TABLE tests ADD COLUMN window_end DATETIME');
-    } catch (alterError) {}
-
     // Create Questions table
-    await run(`
+    await query(`
       CREATE TABLE IF NOT EXISTS questions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        test_id INTEGER NOT NULL,
+        id SERIAL PRIMARY KEY,
+        test_id INTEGER NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
         question_text TEXT NOT NULL,
         option_a TEXT NOT NULL,
         option_b TEXT NOT NULL,
         option_c TEXT NOT NULL,
         option_d TEXT NOT NULL,
-        correct_option TEXT NOT NULL,
-        explanation TEXT,
-        FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
+        correct_option VARCHAR(10) NOT NULL,
+        explanation TEXT
       )
     `);
 
     // Create Results table
-    await run(`
+    await query(`
       CREATE TABLE IF NOT EXISTS results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        test_id INTEGER NOT NULL,
-        student_name TEXT NOT NULL,
-        student_email TEXT NOT NULL,
-        student_id TEXT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        test_id INTEGER NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
+        student_name VARCHAR(255) NOT NULL,
+        student_email VARCHAR(255) NOT NULL,
+        student_id VARCHAR(255) NOT NULL,
         score INTEGER NOT NULL,
         total_questions INTEGER NOT NULL,
         tab_switches INTEGER DEFAULT 0,
         terminated_by_proctor INTEGER DEFAULT 0,
-        submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
+        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Dynamic schema update: try to add terminated_by_proctor to results table
-    try {
-      await run('ALTER TABLE results ADD COLUMN terminated_by_proctor INTEGER DEFAULT 0');
-    } catch (alterError) {}
-
-    console.log('Database schema initialized successfully.');
+    console.log('Database schema initialized successfully in Supabase (PostgreSQL).');
   } catch (err) {
     console.error('Error initializing database:', err);
   }
@@ -176,116 +111,123 @@ async function initializeDatabase() {
 
 // Database helper functions
 module.exports = {
-  db,
-  run,
-  get,
-  all,
+  pool,
+  query,
   transaction,
   initializeDatabase,
 
   // Sectors
-  async getOrCreateSector(name) {
+  async getOrCreateSector(name, client = pool) {
     const trimmedName = name.trim();
-    let sector = await get('SELECT * FROM sectors WHERE LOWER(name) = LOWER(?)', [trimmedName]);
+    let res = await client.query('SELECT * FROM sectors WHERE LOWER(name) = LOWER($1)', [trimmedName]);
+    let sector = res.rows[0];
     if (!sector) {
-      const result = await run('INSERT INTO sectors (name) VALUES (?)', [trimmedName]);
-      sector = { id: result.id, name: trimmedName };
+      const insertResult = await client.query('INSERT INTO sectors (name) VALUES ($1) RETURNING id', [trimmedName]);
+      sector = { id: insertResult.rows[0].id, name: trimmedName };
     }
     return sector;
   },
 
   async getAllSectors() {
-    return all('SELECT * FROM sectors ORDER BY name ASC');
+    const res = await query('SELECT * FROM sectors ORDER BY name ASC');
+    return res.rows;
   },
 
   // Tests
-  async createTest(sectorId, name, durationMins, proctoringEnabled = 0, maxWarnings = 3, windowStart = null, windowEnd = null) {
-    const result = await run(
-      'INSERT INTO tests (sector_id, name, duration_mins, proctoring_enabled, max_warnings, window_start, window_end) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  async createTest(sectorId, name, durationMins, proctoringEnabled = 0, maxWarnings = 3, windowStart = null, windowEnd = null, client = pool) {
+    const result = await client.query(
+      'INSERT INTO tests (sector_id, name, duration_mins, proctoring_enabled, max_warnings, window_start, window_end) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
       [sectorId, name, durationMins, proctoringEnabled ? 1 : 0, maxWarnings, windowStart, windowEnd]
     );
-    return result.id;
+    return result.rows[0].id;
   },
 
   async getTestsBySector(sectorId) {
-    return all('SELECT * FROM tests WHERE sector_id = ? ORDER BY created_at DESC', [sectorId]);
+    const res = await query('SELECT * FROM tests WHERE sector_id = $1 ORDER BY created_at DESC', [sectorId]);
+    return res.rows;
   },
 
   async getTestById(testId) {
-    return get(
+    const res = await query(
       `SELECT t.*, s.name as sector_name 
        FROM tests t 
        JOIN sectors s ON t.sector_id = s.id 
-       WHERE t.id = ?`,
+       WHERE t.id = $1`,
       [testId]
     );
+    return res.rows[0];
   },
 
   async deleteTest(testId) {
-    return run('DELETE FROM tests WHERE id = ?', [testId]);
+    return query('DELETE FROM tests WHERE id = $1', [testId]);
   },
 
   // Questions
-  async addQuestion(testId, questionText, a, b, c, d, correct, explanation) {
-    return run(
+  async addQuestion(testId, questionText, a, b, c, d, correct, explanation, client = pool) {
+    return client.query(
       `INSERT INTO questions (test_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [testId, questionText, a, b, c, d, correct.toUpperCase().trim(), explanation]
     );
   },
 
   async getQuestionsByTest(testId) {
-    return all('SELECT * FROM questions WHERE test_id = ? ORDER BY id ASC', [testId]);
+    const res = await query('SELECT * FROM questions WHERE test_id = $1 ORDER BY id ASC', [testId]);
+    return res.rows;
   },
 
   // Results
   async saveResult(testId, studentName, studentEmail, studentId, score, totalQuestions, tabSwitches, terminatedByProctor = 0) {
-    return run(
+    return query(
       `INSERT INTO results (test_id, student_name, student_email, student_id, score, total_questions, tab_switches, terminated_by_proctor) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [testId, studentName.trim(), studentEmail.trim(), studentId.trim(), score, totalQuestions, tabSwitches, terminatedByProctor ? 1 : 0]
     );
   },
 
   async getResultsByTest(testId) {
-    return all(
-      `SELECT * FROM results WHERE test_id = ? ORDER BY score DESC, submitted_at ASC`,
+    const res = await query(
+      `SELECT * FROM results WHERE test_id = $1 ORDER BY score DESC, submitted_at ASC`,
       [testId]
     );
+    return res.rows;
   },
 
   async getAllResults() {
-    return all(
+    const res = await query(
       `SELECT r.*, t.name as test_name, s.name as sector_name
        FROM results r
        JOIN tests t ON r.test_id = t.id
        JOIN sectors s ON t.sector_id = s.id
        ORDER BY r.submitted_at DESC`
     );
+    return res.rows;
   },
 
   // Multi-Admin Helpers
   async createAdmin(username, passwordHash) {
     const trimmedUsername = username.trim().toLowerCase();
-    return run(
-      'INSERT INTO admins (username, password) VALUES (?, ?)',
+    return query(
+      'INSERT INTO admins (username, password) VALUES ($1, $2)',
       [trimmedUsername, passwordHash]
     );
   },
 
   async getAdminByUsername(username) {
     const trimmedUsername = username.trim().toLowerCase();
-    return get('SELECT * FROM admins WHERE username = ?', [trimmedUsername]);
+    const res = await query('SELECT * FROM admins WHERE username = $1', [trimmedUsername]);
+    return res.rows[0];
   },
 
   async countAdmins() {
-    const row = await get('SELECT COUNT(*) as count FROM admins');
-    return row ? row.count : 0;
+    const res = await query('SELECT COUNT(*) as count FROM admins');
+    const row = res.rows[0];
+    return row ? parseInt(row.count, 10) : 0;
   },
 
   // Test Results Release Status Control
   async setTestResultsReleaseStatus(testId, isReleased) {
     const status = isReleased ? 1 : 0;
-    return run('UPDATE tests SET results_released = ? WHERE id = ?', [status, testId]);
+    return query('UPDATE tests SET results_released = $1 WHERE id = $2', [status, testId]);
   }
 };
