@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aegis Assessment - Admin Panel</title>
+  <title>BPHC Testing Platform - Admin Panel</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
@@ -55,7 +55,7 @@
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
-        Aegis <span>Testing</span>
+        BPHC <span>Testing</span>
       </a>
       <nav>
         <ul class="nav-links">
@@ -352,7 +352,7 @@
   </main>
 
   <footer class="footer">
-    <p>&copy; 2026 Aegis Testing Platform. All rights reserved.</p>
+    <p>&copy; 2026 BPHC Testing Platform. All rights reserved.</p>
   </footer>
 
   <div id="toast-notification" class="toast">
@@ -840,7 +840,7 @@
       });
       worksheet['!cols'] = maxColWidths.map(w => ({ wch: w }));
 
-      XLSX.writeFile(workbook, `aegis_assessment_results_${new Date().toISOString().slice(0,10)}.xlsx`);
+      XLSX.writeFile(workbook, `bphc_testing_results_${new Date().toISOString().slice(0,10)}.xlsx`);
       showToast('Excel file downloaded.', 'success');
     });
 

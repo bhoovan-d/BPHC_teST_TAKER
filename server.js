@@ -398,7 +398,7 @@ app.get('/api/admin/results/export', checkAdminAuth, async (req, res) => {
 
     const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
     
-    res.setHeader('Content-Disposition', `attachment; filename=aegis_assessment_results_${new Date().toISOString().slice(0,10)}.xlsx`);
+    res.setHeader('Content-Disposition', `attachment; filename=bphc_testing_results_${new Date().toISOString().slice(0,10)}.xlsx`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buffer);
   } catch (error) {

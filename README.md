@@ -1,6 +1,6 @@
-﻿# Aegis Testing Platform
+# BPHC Testing Platform
 
-A secure, multi-sector examination and assessment platform built with Node.js, Express, SQLite, and SheetJS. Aegis allows administrators to upload exam papers via Excel files, configure proctoring/time parameters, schedule active windows, and export detailed results back to Excel.
+A secure, multi-sector examination and assessment platform built with Node.js, Express, SQLite, and SheetJS. This platform allows administrators to upload exam papers via Excel files, configure proctoring/time parameters, schedule active windows, and export detailed results back to Excel.
 
 ---
 
@@ -18,7 +18,7 @@ A secure, multi-sector examination and assessment platform built with Node.js, E
 - **Exam Dashboard:** Easy-to-use question panels with instant-jump grids and response indicators.
 - **UX Controls:** Supports keyboard navigation (Arrow keys to navigate, A, B, C, D keys to select options).
 
-### 3. Aegis Proctoring Security
+### 3. Proctoring Security ("Aegis Security")
 - **Focus Monitor:** Track tab-switching, minimization, or workspace changes. Shows an alert overlay and logs focus warning count.
 - **Fullscreen Lock:** Forces fullscreen mode. Escaping fullscreen triggers a warning.
 - **OS Intercepts:** Disables right-clicks (context menu), text selection, and copy/cut/paste commands.
