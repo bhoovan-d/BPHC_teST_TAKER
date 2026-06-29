@@ -107,14 +107,23 @@ function checkAdminAuth(req, res, next) {
 }
 
 // Ensure database is initialized before starting server
-db.initializeDatabase().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+if (process.env.VERCEL !== '1') {
+  db.initializeDatabase().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  }).catch(err => {
+    console.error('Failed to initialize database, shutting down:', err);
+    process.exit(1);
   });
-}).catch(err => {
-  console.error('Failed to initialize database, shutting down:', err);
-  process.exit(1);
-});
+} else {
+  // On Vercel (serverless environment), initialize database asynchronously on boot
+  db.initializeDatabase().catch(err => {
+    console.error('Failed to initialize database:', err);
+  });
+}
+
+module.exports = app;
 
 // --- API ENDPOINTS ---
 
