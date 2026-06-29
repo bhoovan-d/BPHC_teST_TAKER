@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aegis Assessment - Admin Panel</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    /* Admin custom classes */
+    .tab-nav {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid var(--glass-border);
+      padding-bottom: 1rem;
+    }
+    
+    .tab-link {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0.5rem 1rem;
+      border-radius: var(--border-radius-sm);
+      transition: var(--transition-smooth);
+    }
+    
+    .tab-link.active {
+      color: var(--primary-color);
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .stat-card {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--border-radius-sm);
+      padding: 1.5rem;
+      text-align: center;
+    }
+
+    .stat-num {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--primary-color);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-container">
+      <a href="index.html" class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        Aegis <span>Testing</span>
+      </a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="index.html">Student Portal</a></li>
+          <li><a href="admin.html" class="active">Admin Dashboard</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- View 1: Auth Portal (Login or Initial Setup) -->
+    <section id="login-section" style="display: none; max-width: 450px; margin: 5rem auto;">
+      <!-- Login Card -->
+      <div class="glass-card" id="auth-login-card">
+        <h2>Admin Authentication</h2>
+        <p class="subtitle" style="margin-bottom: 1.5rem;">Log in to access the administration dashboard.</p>
+        
+        <form id="admin-login-form">
+          <div class="form-group">
+            <label for="admin-login-username">Username</label>
+            <input type="text" id="admin-login-username" required placeholder="e.g. admin">
+          </div>
+          <div class="form-group">
+            <label for="admin-login-password">Password</label>
+            <input type="password" id="admin-login-password" required placeholder="••••••••">
+          </div>
+          
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+            Log In
+          </button>
+        </form>
+      </div>
+
+      <!-- Registration Card (First Admin Setup) -->
+      <div class="glass-card" id="auth-setup-card" style="display: none;">
+        <h2 style="color: var(--warning-color);">Initial Admin Setup</h2>
+        <p class="subtitle" style="margin-bottom: 1.5rem;">Configure the primary administrator account to secure the platform.</p>
+        
+        <form id="admin-setup-form">
+          <div class="form-group">
+            <label for="admin-setup-username">Username</label>
+            <input type="text" id="admin-setup-username" required minlength="3" placeholder="e.g. admin">
+          </div>
+          <div class="form-group">
+            <label for="admin-setup-password">Password (min 5 chars)</label>
+            <input type="password" id="admin-setup-password" required minlength="5" placeholder="••••••••">
+          </div>
+          
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; background: linear-gradient(135deg, var(--warning-color), var(--accent-color));">
+            Create Administrative Account
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- View 2: Main Admin Dashboard -->
+    <section id="dashboard-section" style="display: none;">
+      <div class="action-bar">
+        <h1>Administrative Console</h1>
+        <button id="admin-logout-btn" class="btn btn-secondary">
+          Log Out
+        </button>
+      </div>
+      
+      <!-- Stats Summary -->
+      <div class="grid-3" style="margin-bottom: 2rem;">
+        <div class="stat-card">
+          <h3>Total Assessments</h3>
+          <div class="stat-num" id="stat-total-tests">0</div>
+        </div>
+        <div class="stat-card">
+          <h3>Student Submissions</h3>
+          <div class="stat-num" id="stat-total-results">0</div>
+        </div>
+        <div class="stat-card">
+          <h3>Sectors Configured</h3>
+          <div class="stat-num" id="stat-total-sectors">0</div>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="tab-nav">
+        <button class="tab-link active" onclick="switchTab('upload')">Create & Upload Test</button>
+        <button class="tab-link" onclick="switchTab('results')">Student Results</button>
+        <button class="tab-link" onclick="switchTab('tests')">Manage Tests</button>
+        <button class="tab-link" onclick="switchTab('admins')">Administrators</button>
+      </div>
+
+      <!-- Tab 1: Upload Form -->
+      <div id="tab-content-upload" class="tab-content">
+        <div class="admin-grid">
+          <!-- Upload Card -->
+          <div class="glass-card">
+            <h3>Upload New Exam Paper</h3>
+            <p class="subtitle" style="margin-bottom: 1.5rem;">Fill in the test details and upload the Excel template spreadsheet.</p>
+            
+            <form id="upload-test-form">
+              <div class="form-group">
+                <label for="upload-sector">Sector Name</label>
+                <input type="text" id="upload-sector" required placeholder="e.g. IT, Finance, Healthcare">
+              </div>
+              
+              <div class="form-group">
+                <label for="upload-name">Test / Exam Name</label>
+                <input type="text" id="upload-name" required placeholder="e.g. SQL Intermediate Exam">
+              </div>
+              
+              <div class="form-group">
+                <label for="upload-duration">Duration (Minutes)</label>
+                <input type="number" id="upload-duration" required min="0" value="30" placeholder="0 for unlimited time">
+                <small style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.25rem; display: block;">Set 0 if there is no timer.</small>
+              </div>
+
+              <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <div>
+                  <label for="upload-window-start">Start Window (Optional)</label>
+                  <input type="datetime-local" id="upload-window-start" style="width: 100%;">
+                  <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">When test becomes active.</small>
+                </div>
+                <div>
+                  <label for="upload-window-end">Close Window (Optional)</label>
+                  <input type="datetime-local" id="upload-window-end" style="width: 100%;">
+                  <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">When submissions close.</small>
+                </div>
+              </div>
+
+              <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.5rem; margin-bottom: 1.5rem;">
+                <input type="checkbox" id="upload-proctoring" style="width: 20px; height: 20px; cursor: pointer;">
+                <label for="upload-proctoring" style="margin-bottom: 0; cursor: pointer; font-weight: 500;">Enforce Auto-Proctoring (Block Copy/Paste, Fullscreen Exit)</label>
+              </div>
+
+              <div class="form-group" id="max-warnings-group" style="display: none;">
+                <label for="upload-max-warnings">Max Proctor Warnings Allowed</label>
+                <input type="number" id="upload-max-warnings" min="1" value="3" style="max-width: 150px;">
+                <small style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.25rem; display: block;">The test will automatically lock and submit if student exceeds this limit.</small>
+              </div>
+
+              <div class="form-group">
+                <label>Question Spreadsheet File</label>
+                <div class="file-upload-wrapper" id="file-dropzone">
+                  <span class="file-upload-icon">&#128196;</span>
+                  <span class="file-upload-text">Drag & drop or click to choose Excel file</span>
+                  <span class="file-upload-name" id="file-name-display"></span>
+                  <input type="file" id="upload-file" required accept=".xlsx, .xls, .csv">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+                Upload & Create Exam
+              </button>
+            </form>
+          </div>
+
+          <!-- Documentation / Instructions Card -->
+          <div class="glass-card" style="background: rgba(99, 102, 241, 0.03);">
+            <h3>Instructions & Templates</h3>
+            <p class="subtitle" style="margin-bottom: 1.5rem;">Download the official format Excel template and read the creation guidelines.</p>
+            
+            <div style="margin-bottom: 2rem;">
+              <a href="/api/admin/template" class="btn btn-secondary" style="width: 100%; gap: 0.75rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download Excel Template
+              </a>
+            </div>
+
+            <div style="font-size: 0.95rem; display: flex; flex-direction: column; gap: 1rem;">
+              <h4 style="color: var(--primary-color);">Excel Column Guidelines:</h4>
+              <ul style="padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; color: var(--text-secondary);">
+                <li><strong>Question:</strong> The main statement/question text.</li>
+                <li><strong>Option A, B, C, D:</strong> The four multiple choice options.</li>
+                <li><strong>Correct Option:</strong> Must be exactly: <code>A</code>, <code>B</code>, <code>C</code>, or <code>D</code>.</li>
+                <li><strong>Explanation:</strong> Details on why the answer is correct (optional).</li>
+              </ul>
+              
+              <div style="background: rgba(245, 158, 11, 0.1); border-left: 4px solid var(--warning-color); padding: 1rem; border-radius: 4px; font-size: 0.85rem; color: var(--text-primary); margin-top: 1rem;">
+                <strong>Note:</strong> Columns headers are case-insensitive. Extra columns are ignored. Row processing will halt if correct options do not match A, B, C, or D.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Results List -->
+      <div id="tab-content-results" class="tab-content" style="display: none;">
+        <div class="glass-card">
+          <div class="action-bar">
+            <div>
+              <button id="export-excel-btn" class="btn btn-secondary">
+                Export to Excel
+              </button>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; background: rgba(255,255,255,0.02); padding: 0.75rem 1rem; border-radius: var(--border-radius-sm); border: 1px solid var(--glass-border); max-width: fit-content;">
+            <label for="results-test-filter" style="margin-bottom: 0; font-weight: 500; font-size: 0.95rem; color: var(--text-secondary);">Filter by Test:</label>
+            <select id="results-test-filter" style="background: rgba(11,15,25,0.8); color: var(--text-primary); border: 1px solid var(--glass-border); padding: 0.4rem 1rem; border-radius: var(--border-radius-sm); outline: none; cursor: pointer; min-width: 250px; font-size: 0.9rem;">
+              <option value="all">All Tests</option>
+            </select>
+          </div>
+          
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Student Name</th>
+                  <th>Student ID</th>
+                  <th>Sector</th>
+                  <th>Test Name</th>
+                  <th class="text-center">Score</th>
+                  <th class="text-center">Percentage</th>
+                  <th class="text-center">Tab Switches</th>
+                  <th>Submitted At</th>
+                </tr>
+              </thead>
+              <tbody id="results-table-body">
+                <tr>
+                  <td colspan="8" class="text-center" style="color: var(--text-secondary); padding: 2rem;">No student results logged.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Manage Tests -->
+      <div id="tab-content-tests" class="tab-content" style="display: none;">
+        <div class="glass-card">
+          <h3>Active Test Forms</h3>
+          <p class="subtitle">Lists all currently uploaded tests. Deleting a test will remove it and all related student responses.</p>
+          
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Test Name</th>
+                  <th>Sector</th>
+                  <th>Duration</th>
+                  <th class="text-center">Results Release</th>
+                  <th>Created At</th>
+                  <th class="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="tests-table-body">
+                <tr>
+                  <td colspan="6" class="text-center" style="color: var(--text-secondary); padding: 2rem;">No active test forms.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Manage Admins -->
+      <div id="tab-content-admins" class="tab-content" style="display: none;">
+        <div class="admin-grid">
+          <!-- Register New Admin Card -->
+          <div class="glass-card">
+            <h3>Register Another Administrator</h3>
+            <p class="subtitle" style="margin-bottom: 1.5rem;">Create a new administrator account. Logged-in credentials required to confirm.</p>
+            
+            <form id="admin-register-new-form">
+              <div class="form-group">
+                <label for="admin-reg-username">Username</label>
+                <input type="text" id="admin-reg-username" required minlength="3" placeholder="Username">
+              </div>
+              
+              <div class="form-group">
+                <label for="admin-reg-password">Password (min 5 chars)</label>
+                <input type="password" id="admin-reg-password" required minlength="5" placeholder="••••••••">
+              </div>
+              
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+                Create Administrator
+              </button>
+            </form>
+          </div>
+
+          <div class="glass-card" style="background: rgba(99, 102, 241, 0.03);">
+            <h3>Administrative Access</h3>
+            <p class="subtitle">Multi-admin access lets other team members upload tests, manage examinations, toggle results visibility, and review reports.</p>
+            <div style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.6;">
+              <p style="margin-bottom: 1rem;"><strong>Evaluation Security Guidelines:</strong></p>
+              <ul style="padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; color: var(--text-secondary);">
+                <li>Ensure passwords are strong and not shared.</li>
+                <li>When adding new accounts, they have complete root privilege (can view all scores, download templates, and delete assessments).</li>
+                <li>Always log out of public workstations when leaving the console.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Aegis Testing Platform. All rights reserved.</p>
+  </footer>
+
+  <div id="toast-notification" class="toast">
+    <span id="toast-message"></span>
+  </div>
+
+  <script>
+    // Toast notifications utility
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast-notification');
+      const toastMessage = document.getElementById('toast-message');
+      
+      toast.className = 'toast';
+      if (type === 'error') toast.classList.add('toast-error');
+      if (type === 'success') toast.classList.add('toast-success');
+      
+      toastMessage.textContent = message;
+      toast.classList.add('show');
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 4000);
+    }
+
+    // Global Store
+    let allResults = [];
+    let allTests = [];
+
+    // Authenticate & check initial auth
+    async function checkAuth() {
+      try {
+        // First check setup status
+        const setupRes = await fetch('/api/admin/setup-status');
+        const setupData = await setupRes.json();
+
+        if (setupData.setupRequired) {
+          document.getElementById('login-section').style.display = 'block';
+          document.getElementById('auth-login-card').style.display = 'none';
+          document.getElementById('auth-setup-card').style.display = 'block';
+          document.getElementById('dashboard-section').style.display = 'none';
+          return;
+        }
+
+        // Check active session
+        const response = await fetch('/api/admin/check');
+        const data = await response.json();
+        
+        if (data.authenticated) {
+          showDashboard();
+        } else {
+          showLogin();
+        }
+      } catch (error) {
+        console.error('Auth check error:', error);
+        showLogin();
+      }
+    }
+
+    function showLogin() {
+      document.getElementById('login-section').style.display = 'block';
+      document.getElementById('auth-login-card').style.display = 'block';
+      document.getElementById('auth-setup-card').style.display = 'none';
+      document.getElementById('dashboard-section').style.display = 'none';
+    }
+
+    function showDashboard() {
+      document.getElementById('login-section').style.display = 'none';
+      document.getElementById('dashboard-section').style.display = 'block';
+      loadDashboardData();
+    }
+
+    // Setup Form Submission (First Admin Creation)
+    document.getElementById('admin-setup-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('admin-setup-username').value;
+      const password = document.getElementById('admin-setup-password').value;
+
+      try {
+        const res = await fetch('/api/admin/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Administrative account created successfully! Logging in...', 'success');
+          
+          // Auto login after setup
+          const loginRes = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+          
+          if (loginRes.ok) {
+            showDashboard();
+          } else {
+            showLogin();
+          }
+        } else {
+          showToast(data.error || 'Setup Failed', 'error');
+        }
+      } catch (error) {
+        showToast('Connection error during admin setup.', 'error');
+      }
+    });
+
+    // Login Form Submission
+    document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('admin-login-username').value;
+      const password = document.getElementById('admin-login-password').value;
+      
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Authentication Successful!', 'success');
+          showDashboard();
+        } else {
+          showToast(data.error || 'Authentication Failed', 'error');
+        }
+      } catch (error) {
+        showToast('Connection error. Could not authenticate.', 'error');
+      }
+    });
+
+    // Register Another Admin Form Submission
+    document.getElementById('admin-register-new-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('admin-reg-username').value;
+      const password = document.getElementById('admin-reg-password').value;
+
+      try {
+        const res = await fetch('/api/admin/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showToast(data.message || 'New administrator created successfully!', 'success');
+          document.getElementById('admin-register-new-form').reset();
+        } else {
+          showToast(data.error || 'Registration failed', 'error');
+        }
+      } catch (error) {
+        showToast('Connection error during admin registration.', 'error');
+      }
+    });
+
+    // Logout
+    document.getElementById('admin-logout-btn').addEventListener('click', async () => {
+      await fetch('/api/admin/logout', { method: 'POST' });
+      showToast('Logged out.', 'success');
+      showLogin();
+    });
+
+    // File Input UI enhancement
+    const fileInput = document.getElementById('upload-file');
+    const fileNameDisplay = document.getElementById('file-name-display');
+    const dropzone = document.getElementById('file-dropzone');
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        fileNameDisplay.textContent = `Selected: ${fileInput.files[0].name}`;
+      } else {
+        fileNameDisplay.textContent = '';
+      }
+    });
+
+    // Show/hide max warnings input based on proctoring checkbox
+    document.getElementById('upload-proctoring').addEventListener('change', (e) => {
+      document.getElementById('max-warnings-group').style.display = e.target.checked ? 'block' : 'none';
+    });
+
+    // Upload Form Submit
+    document.getElementById('upload-test-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const sector = document.getElementById('upload-sector').value;
+      const name = document.getElementById('upload-name').value;
+      const duration = document.getElementById('upload-duration').value;
+      const proctoringEnabled = document.getElementById('upload-proctoring').checked;
+      const maxWarnings = document.getElementById('upload-max-warnings').value;
+      const windowStart = document.getElementById('upload-window-start').value;
+      const windowEnd = document.getElementById('upload-window-end').value;
+      const file = fileInput.files[0];
+
+      if (!file) {
+        showToast('Please select a spreadsheet file first.', 'error');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('sectorName', sector);
+      formData.append('testName', name);
+      formData.append('durationMins', duration);
+      formData.append('proctoringEnabled', proctoringEnabled);
+      formData.append('maxWarnings', maxWarnings);
+      formData.append('windowStart', windowStart);
+      formData.append('windowEnd', windowEnd);
+      formData.append('file', file);
+
+      try {
+        showToast('Uploading and parsing exam...', 'success');
+        const res = await fetch('/api/admin/upload-test', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showToast(data.message, 'success');
+          // Reset Form
+          document.getElementById('upload-test-form').reset();
+          document.getElementById('max-warnings-group').style.display = 'none';
+          fileNameDisplay.textContent = '';
+          // Refresh
+          loadDashboardData();
+        } else {
+          showToast(data.error || 'Failed to upload test.', 'error');
+        }
+      } catch (error) {
+        showToast('Network error during test creation.', 'error');
+      }
+    });
+
+    // Load Dashboard Data
+    async function loadDashboardData() {
+      try {
+        // Fetch results
+        const resResults = await fetch('/api/admin/results');
+        allResults = await resResults.json();
+        
+        // Fetch sectors to calculate counts
+        const resSectors = await fetch('/api/sectors');
+        const sectors = await resSectors.json();
+
+        // Let's also collect tests. To get all tests, we can query each sector's tests
+        let tempTests = [];
+        for (const s of sectors) {
+          const resT = await fetch(`/api/sectors/${s.id}/tests`);
+          const testList = await resT.json();
+          testList.forEach(t => {
+            t.sector_name = s.name; // append sector name
+            tempTests.push(t);
+          });
+        }
+        allTests = tempTests;
+
+        // Render Stats
+        document.getElementById('stat-total-tests').textContent = allTests.length;
+        document.getElementById('stat-total-results').textContent = allResults.length;
+        document.getElementById('stat-total-sectors').textContent = sectors.length;
+
+        // Populate Results Filter Dropdown
+        const filterSelect = document.getElementById('results-test-filter');
+        const currentFilterVal = filterSelect.value || 'all';
+        
+        filterSelect.innerHTML = '<option value="all">All Tests</option>' + 
+          allTests.map(t => `<option value="${t.id}">${escapeHTML(t.name)} (${escapeHTML(t.sector_name)})</option>`).join('');
+        
+        if (Array.from(filterSelect.options).some(opt => opt.value === currentFilterVal)) {
+          filterSelect.value = currentFilterVal;
+        } else {
+          filterSelect.value = 'all';
+        }
+
+        // Render Results Table
+        renderResultsTable();
+
+        // Render Tests Table
+        renderTestsTable();
+
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+      }
+    }
+
+    function renderResultsTable() {
+      const tbody = document.getElementById('results-table-body');
+      const filterVal = document.getElementById('results-test-filter').value;
+      
+      const filteredResults = filterVal === 'all'
+        ? allResults
+        : allResults.filter(res => res.test_id === parseInt(filterVal, 10));
+
+      if (filteredResults.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color: var(--text-secondary); padding: 2rem;">No student results logged.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filteredResults.map(res => {
+        const dateStr = new Date(res.submitted_at).toLocaleString();
+        const isTerminated = res.terminated_by_proctor === 1;
+        const percentage = ((res.score / res.total_questions) * 100).toFixed(1);
+        
+        let scoreHTML = `${res.score} / ${res.total_questions}`;
+        let percentHTML = `<strong>${percentage}%</strong>`;
+        let cheatBadge = '';
+
+        if (isTerminated) {
+          scoreHTML = `<span style="color: var(--danger-color); font-weight: 700;">DISQUALIFIED</span>`;
+          percentHTML = `<span style="color: var(--danger-color); font-weight: 700;">Violation</span>`;
+          cheatBadge = `<span class="badge badge-warning" style="background: rgba(239,68,68,0.2); color: var(--danger-color); border: 1px solid var(--danger-color);">${res.tab_switches} warnings</span>`;
+        } else {
+          cheatBadge = res.tab_switches > 2
+            ? `<span class="badge badge-warning">${res.tab_switches} switches</span>`
+            : res.tab_switches > 0
+              ? `<span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text-secondary);">${res.tab_switches}</span>`
+              : `<span class="badge badge-success">0</span>`;
+        }
+
+        return `
+          <tr>
+            <td><strong>${escapeHTML(res.student_name)}</strong></td>
+            <td><code>${escapeHTML(res.student_id)}</code></td>
+            <td>${escapeHTML(res.sector_name)}</td>
+            <td>${escapeHTML(res.test_name)}</td>
+            <td class="text-center">${scoreHTML}</td>
+            <td class="text-center">${percentHTML}</td>
+            <td class="text-center">${cheatBadge}</td>
+            <td>${dateStr}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderTestsTable() {
+      const tbody = document.getElementById('tests-table-body');
+      if (allTests.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--text-secondary); padding: 2rem;">No active test forms.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = allTests.map(test => {
+        const dateStr = new Date(test.created_at).toLocaleDateString();
+        const isReleased = test.results_released === 1;
+        const isProctored = test.proctoring_enabled === 1;
+        
+        const proctorBadge = isProctored
+          ? `<div style="font-size: 0.75rem; color: var(--warning-color); font-weight: 600; margin-top: 0.25rem; display: flex; align-items: center; gap: 0.25rem;"><span style="display:inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warning-color);"></span> Proctor Active (${test.max_warnings} max)</div>`
+          : `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Proctor Off</div>`;
+
+        let windowHTML = '';
+        if (test.window_start || test.window_end) {
+          const startStr = test.window_start ? new Date(test.window_start).toLocaleString() : 'Open';
+          const endStr = test.window_end ? new Date(test.window_end).toLocaleString() : 'No close limit';
+          windowHTML = `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;"><strong>Window:</strong> ${startStr} - ${endStr}</div>`;
+        } else {
+          windowHTML = `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;"><strong>Window:</strong> Always Open</div>`;
+        }
+
+        const releaseBadge = isReleased
+          ? `<span class="badge badge-success">Released</span>`
+          : `<span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text-secondary);">Withheld</span>`;
+
+        const releaseBtnText = isReleased ? 'Hide Scores' : 'Release Scores';
+        const releaseBtnClass = isReleased ? 'btn-secondary' : 'btn-primary';
+
+        return `
+          <tr>
+            <td>
+              <a href="#" style="color: var(--primary-color); font-weight: 700; text-decoration: underline;" onclick="filterResultsByTest(${test.id}); return false;">
+                ${escapeHTML(test.name)}
+              </a>
+              ${proctorBadge}
+              ${windowHTML}
+            </td>
+            <td>${escapeHTML(test.sector_name)}</td>
+            <td>${test.duration_mins > 0 ? `${test.duration_mins} mins` : 'Unlimited'}</td>
+            <td class="text-center" style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+              ${releaseBadge}
+              <button class="btn ${releaseBtnClass}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="toggleResultsRelease(${test.id}, ${!isReleased})">
+                ${releaseBtnText}
+              </button>
+            </td>
+            <td>${dateStr}</td>
+            <td class="text-center">
+              <button class="btn btn-danger" style="padding: 0.4rem 1rem; font-size: 0.8rem;" onclick="deleteTest(${test.id}, '${escapeHTML(test.name)}')">
+                Delete
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function toggleResultsRelease(testId, shouldRelease) {
+      try {
+        const res = await fetch(`/api/admin/tests/${testId}/release`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resultsReleased: shouldRelease })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Results ${shouldRelease ? 'released' : 'withheld'} successfully!`, 'success');
+          loadDashboardData();
+        } else {
+          showToast(data.error || 'Failed to change release status.', 'error');
+        }
+      } catch (error) {
+        showToast('Network error while updating status.', 'error');
+      }
+    }
+
+    async function deleteTest(testId, name) {
+      if (confirm(`Are you sure you want to delete test "${name}"? This deletes all associated questions and student submissions forever.`)) {
+        try {
+          const res = await fetch(`/api/admin/tests/${testId}`, {
+            method: 'DELETE'
+          });
+          const data = await res.json();
+          if (res.ok) {
+            showToast('Test deleted successfully.', 'success');
+            loadDashboardData();
+          } else {
+            showToast(data.error || 'Failed to delete test.', 'error');
+          }
+        } catch (error) {
+          showToast('Network error during test deletion.', 'error');
+        }
+      }
+    }
+
+    function escapeHTML(str) {
+      if (!str) return '';
+      return str.replace(/[&<>'"]/g, 
+        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+      );
+    }
+
+    // Export Excel Utility
+    document.getElementById('export-excel-btn').addEventListener('click', () => {
+      const filterVal = document.getElementById('results-test-filter').value;
+      const dataToExport = filterVal === 'all'
+        ? allResults
+        : allResults.filter(res => res.test_id === parseInt(filterVal, 10));
+
+      if (dataToExport.length === 0) {
+        showToast('No results to export.', 'error');
+        return;
+      }
+
+      // Map database results to matching table headers for Excel
+      const excelData = dataToExport.map(row => {
+        const percentage = ((row.score / row.total_questions) * 100).toFixed(1);
+        const isDisqualified = row.terminated_by_proctor === 1;
+        
+        return {
+          "Student Name": row.student_name,
+          "Student ID": row.student_id,
+          "Student Email": row.student_email,
+          "Sector": row.sector_name,
+          "Test Name": row.test_name,
+          "Score": isDisqualified ? "DISQUALIFIED" : row.score,
+          "Total Questions": row.total_questions,
+          "Percentage": isDisqualified ? "Violation" : `${percentage}%`,
+          "Tab Switches / Warnings": row.tab_switches,
+          "Submitted At": new Date(row.submitted_at).toLocaleString()
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Student Results");
+
+      // Adjust column widths automatically to prevent cut-off values in Excel
+      const maxColWidths = [];
+      excelData.forEach(row => {
+        Object.keys(row).forEach((key, colIndex) => {
+          const val = row[key] !== undefined && row[key] !== null ? String(row[key]) : '';
+          const len = Math.max(val.length, key.length);
+          maxColWidths[colIndex] = Math.max(maxColWidths[colIndex] || 10, len + 2);
+        });
+      });
+      worksheet['!cols'] = maxColWidths.map(w => ({ wch: w }));
+
+      XLSX.writeFile(workbook, `aegis_assessment_results_${new Date().toISOString().slice(0,10)}.xlsx`);
+      showToast('Excel file downloaded.', 'success');
+    });
+
+    // Tab Switching
+    function switchTab(tabId) {
+      const tabs = document.querySelectorAll('.tab-content');
+      tabs.forEach(tab => tab.style.display = 'none');
+      
+      const links = document.querySelectorAll('.tab-link');
+      links.forEach(link => link.classList.remove('active'));
+
+      document.getElementById(`tab-content-${tabId}`).style.display = 'block';
+      
+      // Select the current tab link
+      const clickedLink = Array.from(links).find(link => link.textContent.toLowerCase().includes(tabId));
+      if (clickedLink) clickedLink.classList.add('active');
+    }
+
+    // Filter results helper exposed to window
+    window.filterResultsByTest = function(testId) {
+      document.getElementById('results-test-filter').value = testId;
+      renderResultsTable();
+      switchTab('results');
+    };
+
+    // Initial Load
+    window.addEventListener('DOMContentLoaded', () => {
+      checkAuth();
+      document.getElementById('results-test-filter').addEventListener('change', renderResultsTable);
+    });
+  </script>
+</body>
+</html>

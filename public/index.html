@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aegis Testing Platform</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-container">
+      <a href="index.html" class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        Aegis <span>Testing</span>
+      </a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="index.html" class="active">Student Portal</a></li>
+          <li><a href="admin.html">Admin Dashboard</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- View 1: Sectors Selection -->
+    <section id="sectors-section">
+      <div style="text-align: center; margin-bottom: 3rem;">
+        <h1>Select Your Sector</h1>
+        <p class="subtitle">Choose a sector below to view available examinations and tests.</p>
+      </div>
+      <div id="sectors-grid" class="grid-3">
+        <!-- Sectors populated dynamically -->
+        <div class="text-center" style="grid-column: 1/-1; padding: 3rem; color: var(--text-secondary);">
+          Loading sectors...
+        </div>
+      </div>
+    </section>
+
+    <!-- View 2: Tests List in Selected Sector -->
+    <section id="tests-section" style="display: none;">
+      <div class="action-bar">
+        <div>
+          <button id="back-to-sectors" class="btn btn-secondary">
+            &larr; Back to Sectors
+          </button>
+        </div>
+        <h2 id="sector-title" style="margin-bottom: 0;">IT Sector Tests</h2>
+      </div>
+      <p class="subtitle">Select a test from the active list below to proceed.</p>
+      
+      <div id="tests-container" class="test-list-container">
+        <!-- Tests populated dynamically -->
+      </div>
+    </section>
+
+    <!-- View 3: Student Registration Form -->
+    <section id="register-section" style="display: none; max-width: 600px; margin: 0 auto;">
+      <div class="action-bar">
+        <button id="back-to-tests" class="btn btn-secondary">
+          &larr; Back to Tests
+        </button>
+      </div>
+      <div class="glass-card">
+        <h2 id="register-test-name">Test Registration</h2>
+        <p class="subtitle" style="margin-bottom: 1.5rem;">Please enter your credentials below to begin the assessment.</p>
+        
+        <form id="student-reg-form">
+          <input type="hidden" id="selected-test-id">
+          
+          <div class="form-group">
+            <label for="student-name">Full Name</label>
+            <input type="text" id="student-name" required placeholder="e.g. John Doe">
+          </div>
+          
+          <div class="form-group">
+            <label for="student-email">Email Address</label>
+            <input type="email" id="student-email" required placeholder="e.g. john.doe@example.com">
+          </div>
+          
+          <div class="form-group">
+            <label for="student-id">Student ID / Roll Number</label>
+            <input type="text" id="student-id" required placeholder="e.g. SEC-2026-4890">
+          </div>
+          
+          <div style="margin-top: 2rem;">
+            <button type="submit" class="btn btn-primary" style="width: 100%;">
+              Begin Assessment &rarr;
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Aegis Testing Platform. All rights reserved.</p>
+  </footer>
+
+  <div id="toast-notification" class="toast">
+    <span id="toast-message"></span>
+  </div>
+
+  <script>
+    // Toast notifications utility
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast-notification');
+      const toastMessage = document.getElementById('toast-message');
+      
+      toast.className = 'toast';
+      if (type === 'error') toast.classList.add('toast-error');
+      if (type === 'success') toast.classList.add('toast-success');
+      
+      toastMessage.textContent = message;
+      toast.classList.add('show');
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 4000);
+    }
+
+    // State Variables
+    let selectedSectorId = null;
+
+    // Load sectors on page load
+    async function loadSectors() {
+      const sectorsGrid = document.getElementById('sectors-grid');
+      try {
+        const response = await fetch('/api/sectors');
+        const sectors = await response.json();
+        
+        if (sectors.length === 0) {
+          sectorsGrid.innerHTML = `
+            <div class="text-center" style="grid-column: 1/-1; padding: 3rem; color: var(--text-secondary);">
+              <p style="font-size: 1.2rem; margin-bottom: 1rem;">No active test sectors found.</p>
+              <p style="font-size: 0.95rem;">Please check back later or upload questions via the <a href="admin.html" style="color: var(--primary-color);">Admin Dashboard</a>.</p>
+            </div>
+          `;
+          return;
+        }
+
+        sectorsGrid.innerHTML = sectors.map(sector => `
+          <div class="sector-card" onclick="selectSector(${sector.id}, '${sector.name}')">
+            <h3>${sector.name}</h3>
+            <p>View examinations &rarr;</p>
+          </div>
+        `).join('');
+
+      } catch (error) {
+        console.error('Error fetching sectors:', error);
+        sectorsGrid.innerHTML = `
+          <div class="text-center" style="grid-column: 1/-1; padding: 3rem; color: var(--danger-color);">
+            Error loading sectors. Please check your backend connection.
+          </div>
+        `;
+      }
+    }
+
+    // Switch view to tests list for a sector
+    async function selectSector(sectorId, sectorName) {
+      selectedSectorId = sectorId;
+      document.getElementById('sectors-section').style.display = 'none';
+      document.getElementById('tests-section').style.display = 'block';
+      document.getElementById('sector-title').textContent = `${sectorName} Assessment Portal`;
+
+      const container = document.getElementById('tests-container');
+      container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 2rem;">Loading tests...</div>`;
+
+      try {
+        const response = await fetch(`/api/sectors/${sectorId}/tests`);
+        const tests = await response.json();
+
+        if (tests.length === 0) {
+          container.innerHTML = `
+            <div style="text-align: center; color: var(--text-secondary); padding: 3rem; border: 1px dashed var(--glass-border); border-radius: 8px;">
+              No examinations available in this sector at the moment.
+            </div>
+          `;
+          return;
+        }
+
+        const now = new Date();
+        container.innerHTML = tests.map(test => {
+          const hasStarted = !test.window_start || new Date(test.window_start) <= now;
+          const hasEnded = test.window_end && new Date(test.window_end) < now;
+          
+          let windowHTML = '';
+          if (test.window_start || test.window_end) {
+            const startStr = test.window_start ? new Date(test.window_start).toLocaleString() : 'Open';
+            const endStr = test.window_end ? new Date(test.window_end).toLocaleString() : 'No close limit';
+            windowHTML = `
+              <span style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; color: var(--text-secondary); width: 100%; margin-top: 0.25rem;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Window: ${startStr} - ${endStr}
+              </span>`;
+          }
+
+          let btnHTML = '';
+          if (!hasStarted) {
+            const dateStr = new Date(test.window_start).toLocaleString();
+            btnHTML = `<button class="btn btn-secondary" disabled style="opacity: 0.6; cursor: not-allowed; font-size: 0.85rem; padding: 0.5rem 0.75rem;">Starts at ${dateStr}</button>`;
+          } else if (hasEnded) {
+            btnHTML = `<button class="btn btn-secondary" disabled style="opacity: 0.6; cursor: not-allowed; font-size: 0.85rem; padding: 0.5rem 1rem;">Closed</button>`;
+          } else {
+            btnHTML = `<button class="btn btn-primary" onclick="showRegisterForm(${test.id}, '${test.name}')">Select Assessment</button>`;
+          }
+
+          return `
+            <div class="test-item-card">
+              <div class="test-info">
+                <h4>${test.name}</h4>
+                <div class="test-meta">
+                  <span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    ${test.duration_mins > 0 ? `${test.duration_mins} Minutes` : 'No Time Limit'}
+                  </span>
+                  <span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Exam Paper
+                  </span>
+                  ${windowHTML}
+                </div>
+              </div>
+              ${btnHTML}
+            </div>
+          `;
+        }).join('');
+
+      } catch (error) {
+        console.error('Error fetching tests:', error);
+        container.innerHTML = `<div style="text-align: center; color: var(--danger-color); padding: 2rem;">Error loading tests.</div>`;
+      }
+    }
+
+    // Switch view to Registration Form
+    function showRegisterForm(testId, testName) {
+      document.getElementById('tests-section').style.display = 'none';
+      document.getElementById('register-section').style.display = 'block';
+      document.getElementById('register-test-name').textContent = `Register: ${testName}`;
+      document.getElementById('selected-test-id').value = testId;
+    }
+
+    // Navigation bindings
+    document.getElementById('back-to-sectors').addEventListener('click', () => {
+      document.getElementById('tests-section').style.display = 'none';
+      document.getElementById('sectors-section').style.display = 'block';
+    });
+
+    document.getElementById('back-to-tests').addEventListener('click', () => {
+      document.getElementById('register-section').style.display = 'none';
+      document.getElementById('tests-section').style.display = 'block';
+    });
+
+    // Form Submission
+    document.getElementById('student-reg-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const testId = document.getElementById('selected-test-id').value;
+      const name = encodeURIComponent(document.getElementById('student-name').value);
+      const email = encodeURIComponent(document.getElementById('student-email').value);
+      const studentId = encodeURIComponent(document.getElementById('student-id').value);
+      
+      // Redirect to test page with parameters
+      window.location.href = `test.html?testId=${testId}&name=${name}&email=${email}&studentId=${studentId}`;
+    });
+
+    // Initial Load
+    window.addEventListener('DOMContentLoaded', loadSectors);
+  </script>
+</body>
+</html>
