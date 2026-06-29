@@ -138,23 +138,12 @@ app.get('/api/admin/setup-status', async (req, res) => {
   }
 });
 
-// Admin Registration (first signup is free, subsequent require admin credentials)
+// Admin Registration (first signup is auto-approved, subsequent requests are saved as pending)
 app.post('/api/admin/register', async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password || username.trim().length < 3 || password.length < 5) {
       return res.status(400).json({ error: 'Invalid input. Username must be at least 3 chars and password at least 5 chars.' });
-    }
-
-    const count = await db.countAdmins();
-    if (count > 0) {
-      // Require verification to create other admins
-      const cookies = getCookies(req);
-      const token = cookies.admin_token;
-      const verifiedUser = verifyToken(token);
-      if (!verifiedUser) {
-        return res.status(401).json({ error: 'Only authenticated administrators can register new administrators.' });
-      }
     }
 
     const existing = await db.getAdminByUsername(username);
@@ -164,7 +153,13 @@ app.post('/api/admin/register', async (req, res) => {
 
     const passwordHash = hashPassword(password);
     await db.createAdmin(username, passwordHash);
-    res.json({ success: true, message: 'Admin account created successfully.' });
+
+    const count = await db.countAdmins();
+    if (count === 1) {
+      res.json({ success: true, message: 'Primary administrator account created and authorized successfully.' });
+    } else {
+      res.json({ success: true, pendingApproval: true, message: 'Access request submitted. Your account will remain pending until authorized by the primary administrator.' });
+    }
   } catch (error) {
     console.error('Error registering admin:', error);
     res.status(500).json({ error: 'Failed to register admin account.' });
@@ -184,6 +179,10 @@ app.post('/api/admin/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password.' });
     }
 
+    if (!admin.is_approved) {
+      return res.status(403).json({ error: 'Your admin account is pending authorization by the primary administrator.' });
+    }
+
     const token = generateToken(admin.username);
     res.cookie('admin_token', token, { maxAge: 86400000, httpOnly: true });
     res.clearCookie('admin_pass'); // clean up old auth style
@@ -201,15 +200,88 @@ app.post('/api/admin/logout', (req, res) => {
 });
 
 // Admin Check Auth Status
-app.get('/api/admin/check', (req, res) => {
+app.get('/api/admin/check', async (req, res) => {
   const cookies = getCookies(req);
   const token = cookies.admin_token;
   const verifiedUser = verifyToken(token);
   
   if (verifiedUser) {
-    res.json({ authenticated: true, username: verifiedUser });
+    // Check if the user is still approved in the database
+    const admin = await db.getAdminByUsername(verifiedUser);
+    if (admin && admin.is_approved) {
+      res.json({ authenticated: true, username: verifiedUser });
+    } else {
+      res.clearCookie('admin_token');
+      res.json({ authenticated: false, error: 'Your session was revoked or is pending authorization.' });
+    }
   } else {
     res.json({ authenticated: false });
+  }
+});
+
+// Admin List (Only accessible by primary master admin 'admin')
+app.get('/api/admin/list', checkAdminAuth, async (req, res) => {
+  try {
+    if (req.adminUser !== 'admin') {
+      return res.status(403).json({ error: 'Only the primary administrator can manage other admin accounts.' });
+    }
+    const admins = await db.getAllAdmins();
+    res.json(admins);
+  } catch (error) {
+    console.error('Error fetching admin list:', error);
+    res.status(500).json({ error: 'Failed to retrieve admin list.' });
+  }
+});
+
+// Admin Approval/Revocation (Only accessible by primary master admin 'admin')
+app.post('/api/admin/approve', checkAdminAuth, async (req, res) => {
+  try {
+    if (req.adminUser !== 'admin') {
+      return res.status(403).json({ error: 'Only the primary administrator can authorize admin accounts.' });
+    }
+    const { adminId, approved } = req.body;
+    if (!adminId) {
+      return res.status(400).json({ error: 'Admin ID is required.' });
+    }
+    
+    // Check that we aren't modifying the primary admin itself (which should always be approved)
+    const all = await db.getAllAdmins();
+    const target = all.find(a => a.id === parseInt(adminId, 10));
+    if (target && target.username === 'admin') {
+      return res.status(400).json({ error: 'Cannot modify approval status of the primary administrator.' });
+    }
+
+    await db.setAdminApproval(parseInt(adminId, 10), approved ? true : false);
+    res.json({ success: true, message: approved ? 'Admin account authorized.' : 'Admin account authorization revoked.' });
+  } catch (error) {
+    console.error('Error changing admin approval:', error);
+    res.status(500).json({ error: 'Failed to update admin authorization.' });
+  }
+});
+
+// Admin Deletion (Only accessible by primary master admin 'admin')
+app.post('/api/admin/delete-admin', checkAdminAuth, async (req, res) => {
+  try {
+    if (req.adminUser !== 'admin') {
+      return res.status(403).json({ error: 'Only the primary administrator can delete admin accounts.' });
+    }
+    const { adminId } = req.body;
+    if (!adminId) {
+      return res.status(400).json({ error: 'Admin ID is required.' });
+    }
+
+    // Prevent primary admin deletion
+    const all = await db.getAllAdmins();
+    const target = all.find(a => a.id === parseInt(adminId, 10));
+    if (target && target.username === 'admin') {
+      return res.status(400).json({ error: 'Cannot delete the primary administrator account.' });
+    }
+
+    await db.deleteAdmin(parseInt(adminId, 10));
+    res.json({ success: true, message: 'Admin account deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting admin:', error);
+    res.status(500).json({ error: 'Failed to delete admin account.' });
   }
 });
 

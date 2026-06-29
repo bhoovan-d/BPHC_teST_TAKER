@@ -44,9 +44,17 @@ async function initializeDatabase() {
         id SERIAL PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
         password TEXT NOT NULL,
+        is_approved BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Add is_approved column if it doesn't exist
+    try {
+      await query('ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT FALSE');
+    } catch (alterError) {
+      console.error('Error adding is_approved column:', alterError);
+    }
 
     // Create Sectors table
     await query(`
@@ -207,9 +215,13 @@ module.exports = {
   // Multi-Admin Helpers
   async createAdmin(username, passwordHash) {
     const trimmedUsername = username.trim().toLowerCase();
+    const countRes = await query('SELECT COUNT(*) as count FROM admins');
+    const count = parseInt(countRes.rows[0].count, 10);
+    const isApproved = count === 0; // First admin is auto-approved
+
     return query(
-      'INSERT INTO admins (username, password) VALUES ($1, $2)',
-      [trimmedUsername, passwordHash]
+      'INSERT INTO admins (username, password, is_approved) VALUES ($1, $2, $3)',
+      [trimmedUsername, passwordHash, isApproved]
     );
   },
 
@@ -223,6 +235,19 @@ module.exports = {
     const res = await query('SELECT COUNT(*) as count FROM admins');
     const row = res.rows[0];
     return row ? parseInt(row.count, 10) : 0;
+  },
+
+  async getAllAdmins() {
+    const res = await query('SELECT id, username, is_approved, created_at FROM admins ORDER BY id ASC');
+    return res.rows;
+  },
+
+  async setAdminApproval(adminId, isApproved) {
+    return query('UPDATE admins SET is_approved = $1 WHERE id = $2', [isApproved, adminId]);
+  },
+
+  async deleteAdmin(adminId) {
+    return query('DELETE FROM admins WHERE id = $1', [adminId]);
   },
 
   // Test Results Release Status Control
