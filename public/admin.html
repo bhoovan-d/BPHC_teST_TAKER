@@ -141,10 +141,13 @@
 
     <!-- View 2: Main Admin Dashboard -->
     <section id="dashboard-section" style="display: none;">
-      <div class="action-bar">
-        <h1>Administrative Console</h1>
-        <button id="admin-logout-btn" class="btn btn-secondary">
-          Log Out
+      <div class="admin-header-strip">
+        <div>
+          <h1>Administrative Console</h1>
+          <p style="color: #93c5fd; font-size: 0.825rem; margin-top: 0.15rem;" id="admin-username-label">Loading...</p>
+        </div>
+        <button id="admin-logout-btn" class="btn" style="background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.2); font-size: 0.825rem; padding: 0.45rem 1rem;">
+          Sign Out
         </button>
       </div>
       
@@ -464,6 +467,9 @@
       currentAdminUser = username;
       document.getElementById('login-section').style.display = 'none';
       document.getElementById('dashboard-section').style.display = 'block';
+
+      const label = document.getElementById('admin-username-label');
+      if (label) label.textContent = `Signed in as ${username}`;
       
       const adminTabLink = document.getElementById('nav-link-admins');
       if (username === 'admin') {
